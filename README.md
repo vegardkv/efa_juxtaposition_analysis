@@ -1,14 +1,15 @@
 # EFA Juxtaposition Analysis
 
-A professional geological analysis tool for interactive visualization and analysis of geological data.
+Geology application to quicky analyze fault juxtaposition for single faults.
 
 ## Features
 
-- Interactive geological analysis
-- Mouse hover functionality on plots
-- Clipboard integration for all plots
-- Professional visualization tools
+- Input Petrel Fault cuttof points or Cegal fault cuttof points in Petrel points with attribute format
+- Single to multiple horizon input
+- Supports horizon shifting
+- Generates interactive throw profiles and juxtaposition diagrams
 - Session save/load capabilities
+- Figure to clip-borad support and saves figure to different formats
 - CSV export functionality
 
 ## Version
