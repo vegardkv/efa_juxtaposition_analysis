@@ -49,16 +49,19 @@ More information abut installing python using uv can be found at the Equinor wik
    uv add numpy pandas matplotlib scipy shapely
    ```
 
-6. Downlaod the application file .py from GitHub and copy it into your application folder. The application can now be launched using cmd, type or copy/paste:
-```
-c:\Appl\efa_uv_app\.venv\Scripts\activate && cd c:\Appl\efa_uv_app\ && uv run EFA_juxtaposition_v0p9p6.py
-```
+6. Download the application files from GitHub:
+   - [EFA_juxtaposition_v0p9p6.py](./efa_juxtaposition_app/EFA_juxtaposition_v0p9p6.py)
+   - [EFA_juxtaposition_launcher.bat](./efa_juxtaposition_app/EFA_juxtaposition_launcher.bat)
+   
+   Copy these files into your application folder (c:\Appl\efa_uv_app\). 
+The application can now be launched by double clicking EFA_juxtaposition_launcher.bat
 
+Alternatively the application can be launched using cmd, type or copy/paste:
 ```
 cd c:\Appl\efa_uv_app\ && uv run EFA_juxtaposition_v0p9p6.py
 ```
 
-The application can now be launched by double-clicking the .bat file. A shortcut to the .bat file can also be made, and copied to e.g. your desktop.
+The application can also be launcehd by downloading or creating the batch file EFA_juxtaposition_launcher.bat. A shortcut to the .bat file can also be made, and copied to e.g. your desktop.
 
 
 Installation using pip
