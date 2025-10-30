@@ -1,6 +1,6 @@
 # EFA Juxtaposition Analysis
 
-Geology application to quicky analyze fault juxtaposition for single faults.
+Geology application to quicky analyze fault juxtaposition for single faults by creating throw profiles and juxtaposition (Allan) diagrams.
 
 ## Features
 
@@ -11,6 +11,59 @@ Geology application to quicky analyze fault juxtaposition for single faults.
 - Session save/load capabilities
 - Figure to clip-borad support and saves figure to different formats
 - CSV export functionality
+
+## Installation
+
+If you don't already have python installed on your system, it is reccomende to use uv for installing the application and dependencies. However, you can also use pip if this is preferred.
+
+Installation using uv:
+This guide explains how to install python using uv, create an application folder and install dependencies for the application. If you already have installad python using uv, step  1 and 2 can be skipped.
+More information abut installing python using uv can be found at the Equinor wiki. 
+
+1. Open cmd and type or copy/paste:
+   winget install --id=astral-sh.uv -e
+
+   press 'Y' when asked. When it finishes, close the command-line interpreter window.
+
+2. Open a new command-line interpreter window (cmd) and install the latest Python, type or copy/paste:
+   uv python install
+
+3. Navigate to c:/Appl and create application folder. If the Appl folder don't exist, create it. In command_line_interptreter (cmd), type or copy/paste:
+   c:
+   cd Appl
+   uv init efa_uv_app
+
+4. Navigate into the application folder, in cmd type or copy/paste:
+   cd efa_uv_app
+
+5. Install application dependencies, in cmd type or copy/paste:
+   uv add numpy pandas matplotlib scipy shapely
+
+6. Downlaod the application file .py and .bat file from GitHub and copy them into your application folder.
+
+The application can now be launched by double-clicking the .bat file. A shortcut to the .bat file can also be made, and copied to e.g. your desktop.
+
+
+Installation using pip
+
+1. Ensure Python 3.x is installed
+2. Install required dependencies:
+   ```bash
+   pip install tkinter matplotlib pandas numpy scipy shapely pillow
+   ```
+3. Run the application:
+   ```bash
+   python EFA_juxtaposition_v0p93_u2.py
+   ```
+
+## Usage
+
+Launch the application and use the tabbed interface to:
+- Load geological data
+- Create interactive plots
+- Analyze juxtaposition relationships
+- Export results
+
 
 ## Version
 
@@ -38,25 +91,7 @@ The GNU General Public License v3.0 is a **copyleft** license that ensures:
 
 This guarantees that the software and all its derivatives remain free and open source forever.
 
-## Installation
 
-1. Ensure Python 3.x is installed
-2. Install required dependencies:
-   ```bash
-   pip install tkinter matplotlib pandas numpy scipy shapely pillow
-   ```
-3. Run the application:
-   ```bash
-   python EFA_juxtaposition_v0p93_u2.py
-   ```
-
-## Usage
-
-Launch the application and use the tabbed interface to:
-- Load geological data
-- Create interactive plots
-- Analyze juxtaposition relationships
-- Export results
 
 ## Contributing
 
