@@ -28,18 +28,24 @@ More information abut installing python using uv can be found at the Equinor wik
    press 'Y' when asked. When it finishes, close the command-line interpreter window.
 
 2. Open a new command-line interpreter window (cmd) and install the latest Python, type or copy/paste:
+   ```
    uv python install
+   ```
 
 3. Navigate to c:/Appl and create application folder. If the Appl folder don't exist, create it. In command_line_interptreter (cmd), type or copy/paste:
-   c:
-   cd Appl
-   uv init efa_uv_app
+   ```
+   c: && cd Appl && uv init efa_uv_app
+   ```
 
 4. Navigate into the application folder, in cmd type or copy/paste:
+   ```
    cd efa_uv_app
+   ```
 
 5. Install application dependencies, in cmd type or copy/paste:
+   ```
    uv add numpy pandas matplotlib scipy shapely
+   ```
 
 6. Downlaod the application file .py and .bat file from GitHub and copy them into your application folder.
 
