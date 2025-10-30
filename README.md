@@ -52,16 +52,33 @@ More information abut installing python using uv can be found at the Equinor wik
 6. Download the application files from GitHub:
    - [EFA_juxtaposition_v0p9p6.py](./efa_juxtaposition_app/EFA_juxtaposition_v0p9p6.py)
    - [EFA_juxtaposition_launcher.bat](./efa_juxtaposition_app/EFA_juxtaposition_launcher.bat)
+   - [EFA_juxtaposition_launcher_advanced.bat](./efa_juxtaposition_app/EFA_juxtaposition_launcher_advanced.bat)
    
    Copy these files into your application folder (c:\Appl\efa_uv_app\). 
-The application can now be launched by double clicking EFA_juxtaposition_launcher.bat
 
-Alternatively the application can be launched using cmd, type or copy/paste:
-```
-cd c:\Appl\efa_uv_app\ && uv run EFA_juxtaposition_v0p9p6.py
+## Launching the Application
+
+### Option 1: Using Batch File (Recommended)
+The application can be launched by double-clicking one of the provided batch files:
+- **EFA_juxtaposition_launcher.bat** - Basic launcher with dependency checks
+- **EFA_juxtaposition_launcher_advanced.bat** - Advanced launcher with detailed reporting
+
+Both batch files will:
+- Check if uv is installed
+- Verify the application directory exists
+- Confirm the Python file is present
+- Validate that all required libraries are installed
+- Launch the application if all checks pass
+
+### Option 2: Using Command Line
+Alternatively, the application can be launched using cmd. Navigate to the application directory and run:
+```cmd
+cd c:\Appl\efa_uv_app
+uv run EFA_juxtaposition_v0p9p6.py
 ```
 
-The application can also be launcehd by downloading or creating the batch file EFA_juxtaposition_launcher.bat. A shortcut to the .bat file can also be made, and copied to e.g. your desktop.
+### Creating a Desktop Shortcut
+You can create a shortcut to either batch file and copy it to your desktop for easy access.
 
 
 Installation using pip
@@ -69,7 +86,7 @@ Installation using pip
 1. Ensure Python 3.x is installed
 2. Install required dependencies:
    ```bash
-   pip install tkinter matplotlib pandas numpy scipy shapely pillow
+   pip install matplotlib pandas numpy scipy shapely
    ```
 3. Run the application:
    ```bash
