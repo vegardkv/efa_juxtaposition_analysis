@@ -21,7 +21,9 @@ This guide explains how to install python using uv, create an application folder
 More information abut installing python using uv can be found at the Equinor wiki. 
 
 1. Open cmd and type or copy/paste:
-   winget install --id=astral-sh.uv -e
+   ```
+   **winget install --id=astral-sh.uv -e**
+   ```
 
    press 'Y' when asked. When it finishes, close the command-line interpreter window.
 
