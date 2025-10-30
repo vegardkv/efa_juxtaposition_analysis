@@ -34,7 +34,9 @@ More information abut installing python using uv can be found at the Equinor wik
 
 3. Navigate to c:/Appl and create application folder. If the Appl folder don't exist, create it. In command_line_interptreter (cmd), type or copy/paste:
    ```
-   c: && cd Appl && uv init efa_uv_app
+      c:
+      cd \Appl
+      uv init efa_uv_app
    ```
 
 4. Navigate into the application folder, in cmd type or copy/paste:
