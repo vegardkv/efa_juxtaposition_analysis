@@ -1,7 +1,7 @@
 @echo off
 REM EFA Juxtaposition Analysis - Quick Setup Script for Windows
 REM Copyright (C) 2025 John-Are Hansen
-REM Licensed under GPL v3.0
+REM Licensed under MIT License
 
 echo =========================================
 echo EFA Juxtaposition Analysis Setup

@@ -2,7 +2,7 @@
 """
 EFA Juxtaposition Analysis - fault displacement and zone juxtaposition analysis
 
-Copyright (C) 2025 John-Are Hansen
+Copyright (C) 2025 Equinor ASA
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

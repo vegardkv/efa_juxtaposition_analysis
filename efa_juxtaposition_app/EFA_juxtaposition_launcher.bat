@@ -90,7 +90,7 @@ echo Starting application... (this may take a few moments)
 echo To close the application, close the GUI window or press Ctrl+C in this terminal
 echo.
 
-uv run EFA_juxtaposition_v0p9p6.py
+uv run EFA_juxtaposition_app.py
 
 REM Check if the application started successfully
 if %errorlevel% neq 0 (
