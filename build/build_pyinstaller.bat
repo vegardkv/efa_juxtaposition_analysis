@@ -2,7 +2,7 @@
 REM ============================================================================
 REM EFA Juxtaposition Analysis - PyInstaller Build Script
 REM ============================================================================
-REM This script compiles EFA_juxtaposition_v0p9p9.py using PyInstaller
+REM This script compiles EFA_juxtaposition_app.py using PyInstaller
 REM Creates a folder containing the executable and all dependencies
 REM ============================================================================
 
@@ -42,7 +42,7 @@ REM Clean previous builds
 echo [3/5] Cleaning previous builds...
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
-if exist "EFA_juxtaposition_v0p9p9.spec" del "EFA_juxtaposition_v0p9p9.spec"
+if exist "EFA_juxtaposition_app.spec" del "EFA_juxtaposition_app.spec"
 echo Done.
 echo.
 
@@ -52,7 +52,7 @@ echo This may take several minutes...
 echo.
 
 pyinstaller --onedir ^
-    --name="EFA_Juxtaposition_v1.0.0" ^
+    --name="EFA_Juxtaposition_app" ^
     --windowed ^
     --icon=help_images\efa_icon.ico ^
     --add-data "test_data;test_data" ^
@@ -70,7 +70,7 @@ pyinstaller --onedir ^
     --collect-all=matplotlib ^
     --collect-all=shapely ^
     --noupx ^
-    EFA_juxtaposition_v0p9p9.py
+    EFA_juxtaposition_app.py
 
 if errorlevel 1 (
     echo.
@@ -86,14 +86,14 @@ echo.
 REM Copy test_data if build succeeded
 echo [5/5] Copying additional files to distribution folder...
 if exist "test_data" (
-    xcopy "test_data" "dist\EFA_Juxtaposition_v1.0.0\test_data\" /E /I /Y >nul
+    xcopy "test_data" "dist\EFA_Juxtaposition_app\test_data\" /E /I /Y >nul
     echo Test data copied successfully.
 ) else (
     echo WARNING: test_data folder not found. Skipping...
 )
 
 if exist "help_images" (
-    xcopy "help_images" "dist\EFA_Juxtaposition_v1.0.0\help_images\" /E /I /Y >nul
+    xcopy "help_images" "dist\EFA_Juxtaposition_app\help_images\" /E /I /Y >nul
     echo Help images copied successfully.
 ) else (
     echo WARNING: help_images folder not found. Skipping...
@@ -104,19 +104,19 @@ echo ===========================================================================
 echo BUILD COMPLETE!
 echo ============================================================================
 echo.
-echo Output location: dist\EFA_Juxtaposition_v1.0.0\
+echo Output location: dist\EFA_Juxtaposition_app\
 echo.
 echo Directory contents:
-dir "dist\EFA_Juxtaposition_v1.0.0" /B
+dir "dist\EFA_Juxtaposition_app" /B
 echo.
-echo Executable: dist\EFA_Juxtaposition_v1.0.0\EFA_Juxtaposition_v1.0.0.exe
+echo Executable: dist\EFA_Juxtaposition_app\EFA_Juxtaposition_app.exe
 echo.
 echo TO RUN:
-echo   1. Navigate to dist\EFA_Juxtaposition_v1.0.0\
-echo   2. Double-click EFA_Juxtaposition_v1.0.0.exe
+echo   1. Navigate to dist\EFA_Juxtaposition_app\
+echo   2. Double-click EFA_Juxtaposition_app.exe
 echo.
 echo TO DISTRIBUTE:
-echo   1. Zip the entire dist\EFA_Juxtaposition_v1.0.0\ folder
+echo   1. Zip the entire dist\EFA_Juxtaposition_app\ folder
 echo   2. Share the ZIP file
 echo   3. Users extract and run the .exe file
 echo.
