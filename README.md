@@ -98,7 +98,7 @@ More information abut installing python using uv can be found at the Equinor wik
    ```
 
 6. Download the application files from GitHub:
-   - [EFA_juxtaposition_v0p9p6.py](./efa_juxtaposition_app/EFA_juxtaposition_v0p9p6.py)
+   - [EFA_juxtaposition_v0p9p6.py](./efa_juxtaposition_app/EFA_juxtaposition_app.py)
    - [EFA_juxtaposition_launcher.bat](./efa_juxtaposition_app/EFA_juxtaposition_launcher.bat)
 
    
@@ -177,7 +177,7 @@ Launch the application and use the tabbed interface to:
 
 This project is licensed under the MIT License.
 
-Copyright (c) 2026 Equinor ASA
+Copyright (c) 2025 Equinor ASA
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
