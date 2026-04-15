@@ -1,0 +1,62 @@
+{
+  "input": {
+    "file_format": "Petrel_FC",
+    "z_field": "Z",
+    "horizon_files": [
+      "data/horizon_top.txt",
+      "data/horizon_mid.txt",
+      "data/horizon_base.txt"
+    ]
+  },
+  "horizon_settings": {
+    "colors": {
+      "horizon_top.txt": "#E74C3C",
+      "horizon_mid.txt": "#2ECC71"
+    },
+    "aliases": {
+      "horizon_top.txt": "Top Shetland",
+      "horizon_mid.txt": "MFS"
+    },
+    "shifts": {
+      "horizon_mid.txt": { "sh1": -5.0 }
+    }
+  },
+  "zone_settings": {
+    "lithology": {
+      "horizon_top.txt-horizon_mid.txt": "Good",
+      "horizon_mid.txt-horizon_base.txt": "Poor"
+    },
+    "aliases": {
+      "horizon_top.txt-horizon_mid.txt": "Shetland Fm"
+    },
+    "unit_colors": {
+      "Shetland Fm": "#AED6F1"
+    }
+  },
+  "plot_settings": {
+    "title": "Well 34/10-A Fault",
+    "width": 14,
+    "height": 8,
+    "linewidth": 1.2,
+    "gridlines": true,
+    "reference_lines": [
+      {
+        "name": "OWC",
+        "elevation": -2450.0,
+        "xmin": 0.0,
+        "xmax": 6000.0,
+        "style": "dashed",
+        "color": "#2980B9",
+        "enabled": true
+      }
+    ]
+  },
+  "workflow": {
+    "steps": [
+      "load_data",
+      "convert_to_length_depth",
+      "execute_shift",
+      "generate_plots"
+    ]
+  }
+}

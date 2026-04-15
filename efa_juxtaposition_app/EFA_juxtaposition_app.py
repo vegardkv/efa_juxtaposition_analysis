@@ -24,6 +24,7 @@ SOFTWARE.
 
 """
 
+import argparse
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, StringVar, IntVar, BooleanVar, colorchooser
 import matplotlib.pyplot as plt
@@ -44,9 +45,12 @@ from shapely.geometry import Polygon
 import matplotlib.colors as mcolors
 import warnings
 import pickle
+from dataclasses import dataclass, field
 from PIL import Image, ImageTk
 import io
 import os
+
+import json
 
 # Optional Windows clipboard support
 try:
@@ -56,13 +60,138 @@ except ImportError:
     CLIPBOARD_AVAILABLE = False
 
 
+# ---------------------------------------------------------------------------
+# Config dataclass hierarchy
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ReferenceLine:
+    name: str
+    elevation: float
+    xmin: float = 0.0
+    xmax: float = 10000.0
+    style: str = 'dashed'
+    color: str = '#000000'
+    enabled: bool = True
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'ReferenceLine':
+        return cls(
+            name=d.get('name', ''),
+            elevation=float(d.get('elevation', 0.0)),
+            xmin=float(d.get('xmin', 0.0)),
+            xmax=float(d.get('xmax', 10000.0)),
+            style=d.get('style', 'dashed'),
+            color=d.get('color', '#000000'),
+            enabled=bool(d.get('enabled', True)),
+        )
+
+
+@dataclass
+class PlotSettings:
+    title: str = ''
+    width: int = 14
+    height: int = 8
+    linewidth: float = 1.0
+    gridlines: bool = True
+    reference_lines: list = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'PlotSettings':
+        ref_lines = [ReferenceLine.from_dict(rl) for rl in d.get('reference_lines', [])]
+        return cls(
+            title=d.get('title', ''),
+            width=int(d.get('width', 14)),
+            height=int(d.get('height', 8)),
+            linewidth=float(d.get('linewidth', 1.0)),
+            gridlines=bool(d.get('gridlines', True)),
+            reference_lines=ref_lines,
+        )
+
+
+@dataclass
+class HorizonSettings:
+    colors: dict = field(default_factory=dict)
+    aliases: dict = field(default_factory=dict)
+    shifts: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'HorizonSettings':
+        return cls(
+            colors=d.get('colors', {}),
+            aliases=d.get('aliases', {}),
+            shifts=d.get('shifts', {}),
+        )
+
+
+@dataclass
+class ZoneSettings:
+    lithology: dict = field(default_factory=dict)
+    aliases: dict = field(default_factory=dict)
+    unit_colors: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'ZoneSettings':
+        return cls(
+            lithology=d.get('lithology', {}),
+            aliases=d.get('aliases', {}),
+            unit_colors=d.get('unit_colors', {}),
+        )
+
+
+@dataclass
+class InputSettings:
+    file_format: str = 'Petrel_FC'
+    z_field: str = 'Z'
+    horizon_files: list = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'InputSettings':
+        return cls(
+            file_format=d.get('file_format', 'Petrel_FC'),
+            z_field=d.get('z_field', 'Z'),
+            horizon_files=d.get('horizon_files', []),
+        )
+
+
+@dataclass
+class WorkflowSettings:
+    steps: list = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'WorkflowSettings':
+        return cls(steps=d.get('steps', []))
+
+
+@dataclass
+class EFAConfig:
+    input: InputSettings = field(default_factory=InputSettings)
+    horizon_settings: HorizonSettings = field(default_factory=HorizonSettings)
+    zone_settings: ZoneSettings = field(default_factory=ZoneSettings)
+    plot_settings: PlotSettings = field(default_factory=PlotSettings)
+    workflow: WorkflowSettings = field(default_factory=WorkflowSettings)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'EFAConfig':
+        return cls(
+            input=InputSettings.from_dict(d.get('input', {})),
+            horizon_settings=HorizonSettings.from_dict(d.get('horizon_settings', {})),
+            zone_settings=ZoneSettings.from_dict(d.get('zone_settings', {})),
+            plot_settings=PlotSettings.from_dict(d.get('plot_settings', {})),
+            workflow=WorkflowSettings.from_dict(d.get('workflow', {})),
+        )
+
+
+# ---------------------------------------------------------------------------
+
+
 
 class EFA_juxtaposition(tk.Tk):
     VERSION = "1.0.1"
     BUILD_DATE = "2026-02-19"
     AUTHOR = "John-Are Hansen"
 
-    def __init__(self):
+    def __init__(self, config_path=None):
         super().__init__()
         
         # Set up path to help_images folder relative to this script
@@ -137,8 +266,27 @@ class EFA_juxtaposition(tk.Tk):
         self.current_juxt_fig = None
         self.current_scenario_fig = None
         self.current_legend_fig = None
-        
+
+        self.hlines = [
+            {
+                'name':      StringVar(value=""),
+                'elevation': tk.DoubleVar(value=0.0),
+                'xmin':      tk.DoubleVar(value=0.0),
+                'xmax':      tk.DoubleVar(value=10000.0),
+                'style':     StringVar(value="solid"),
+                'color':     StringVar(value="#FF0000"),
+                'enabled':   tk.BooleanVar(value=False),
+            }
+            for _ in range(4)
+        ]
+
         self.create_widgets()
+
+        self._suppress_dialogs = False
+        self._config_workflow_steps = []
+
+        if config_path is not None:
+            self.after_idle(self.load_config, config_path)
     
     def get_resource_path(self, filename):
         """Get the full path to a resource file in the help_images directory."""
@@ -670,7 +818,8 @@ class EFA_juxtaposition(tk.Tk):
             # display qc plot
             self.setup_qc_plot()
             
-            messagebox.showinfo("Success", "Data converted to length/depth format!")
+            if not self._suppress_dialogs:
+                messagebox.showinfo("Success", "Data converted to length/depth format!")
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to convert data: {str(e)}")
@@ -979,7 +1128,8 @@ class EFA_juxtaposition(tk.Tk):
             # Update color settings display in plot tab
             self.update_color_settings_display()
             
-            messagebox.showinfo("Success", "Horizon shift executed successfully!")
+            if not self._suppress_dialogs:
+                messagebox.showinfo("Success", "Horizon shift executed successfully!")
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to execute horizon shift: {str(e)}")
@@ -1218,251 +1368,42 @@ class EFA_juxtaposition(tk.Tk):
         info_label = ttk.Label(line_frame, text="Add horizontal reference lines to display on plots")
         info_label.pack(padx=10, pady=5)
 
-        # Add text entry for line name, followed by number entry for line elevation and store in varialbes
-        # Add name and elevation inputs for horizontal lines 1
-        line_input_frame = ttk.Frame(line_frame)
-        line_input_frame.pack(fill='x', padx=10, pady=5)
-
-        # Line name label and entry
-        ttk.Label(line_input_frame, text="Name:").pack(side='left', padx=(0, 5))
-        if not hasattr(self, 'hline_name_var'):
-            self.hline_name_var = StringVar(value="")
-        line_name_entry = ttk.Entry(line_input_frame, textvariable=self.hline_name_var, width=20)
-        line_name_entry.pack(side='left', padx=5)
-
-        # Line elevation label and entry
-        ttk.Label(line_input_frame, text="Elevation:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline_elevation_var'):
-            self.hline_elevation_var = tk.DoubleVar(value=0.0)
-        line_elevation_entry = ttk.Entry(line_input_frame, textvariable=self.hline_elevation_var, width=10)
-        line_elevation_entry.pack(side='left', padx=5)
-
-        # Line minimum x value label and entry
-        ttk.Label(line_input_frame, text="X min:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline_xmin_var'):
-            self.hline_xmin_var = tk.DoubleVar(value=self.fv_df['length'].min() if self.fv_df is not None else 0.0)
-        line_xmin_entry = ttk.Entry(line_input_frame, textvariable=self.hline_xmin_var, width=10)
-        line_xmin_entry.pack(side='left', padx=5)
-
-        # Line maximum x value label and entry
-        ttk.Label(line_input_frame, text="X max:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline_xmax_var'):
-            self.hline_xmax_var = tk.DoubleVar(value=self.fv_df['length'].max() if self.fv_df is not None else 0.0)
-        line_xmax_entry = ttk.Entry(line_input_frame, textvariable=self.hline_xmax_var, width=10)
-        line_xmax_entry.pack(side='left', padx=5)
-
-        # Line style drop down entry
-        ttk.Label(line_input_frame, text="Style:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline_style_var'):
-            self.hline_style_var = StringVar(value="solid")
         line_style_options = ["solid", "dashed", "dashdot", "dotted"]
-        line_style_menu = ttk.OptionMenu(line_input_frame, self.hline_style_var, self.hline_style_var.get(), *line_style_options)
-        line_style_menu.pack(side='left', padx=5)
+        for hl in self.hlines:
+            line_input_frame = ttk.Frame(line_frame)
+            line_input_frame.pack(fill='x', padx=10, pady=5)
 
-        # Line color selection button
-        if not hasattr(self, 'hline_color_var'):
-            self.hline_color_var = StringVar(value="#FF0000")  # Default to red
-        def choose_hline_color():
-            current_color = self.hline_color_var.get()
-            display_color = current_color if current_color not in ['#000000', '#000', 'black'] else '#FF0000'
-            chosen = colorchooser.askcolor(color=display_color, title="Choose color for horizontal line")[1]
-            if chosen:
-                self.hline_color_var.set(chosen)
-                hline_color_btn.config(bg=chosen, activebackground=chosen)  
-   
+            ttk.Label(line_input_frame, text="Name:").pack(side='left', padx=(0, 5))
+            ttk.Entry(line_input_frame, textvariable=hl['name'], width=20).pack(side='left', padx=5)
 
-        hline_color_btn = tk.Button(line_input_frame, text="Color", command=choose_hline_color, bg=self.hline_color_var.get(), activebackground=self.hline_color_var.get())
-        hline_color_btn.pack(side='left', padx=5)
+            ttk.Label(line_input_frame, text="Elevation:").pack(side='left', padx=(10, 5))
+            ttk.Entry(line_input_frame, textvariable=hl['elevation'], width=10).pack(side='left', padx=5)
 
-        # Add checkbox to enable/disable the horizontal line
-        if not hasattr(self, 'hline_enabled_var'):
-            self.hline_enabled_var = tk.BooleanVar(value=False)
-        hline_enabled_check = ttk.Checkbutton(line_input_frame, text="Enable", variable=self.hline_enabled_var)
-        hline_enabled_check.pack(side='left', padx=5)
+            ttk.Label(line_input_frame, text="X min:").pack(side='left', padx=(10, 5))
+            ttk.Entry(line_input_frame, textvariable=hl['xmin'], width=10).pack(side='left', padx=5)
 
- # Add name and elevation inputs for horizontal lines 2
-        line_input_frame = ttk.Frame(line_frame)
-        line_input_frame.pack(fill='x', padx=10, pady=5)
+            ttk.Label(line_input_frame, text="X max:").pack(side='left', padx=(10, 5))
+            ttk.Entry(line_input_frame, textvariable=hl['xmax'], width=10).pack(side='left', padx=5)
 
-        # Line name label and entry
-        ttk.Label(line_input_frame, text="Name:").pack(side='left', padx=(0, 5))
-        if not hasattr(self, 'hline2_name_var'):
-            self.hline2_name_var = StringVar(value="")
-        line_name_entry = ttk.Entry(line_input_frame, textvariable=self.hline2_name_var, width=20)
-        line_name_entry.pack(side='left', padx=5)
+            ttk.Label(line_input_frame, text="Style:").pack(side='left', padx=(10, 5))
+            ttk.OptionMenu(line_input_frame, hl['style'], hl['style'].get(), *line_style_options).pack(side='left', padx=5)
 
-        # Line elevation label and entry
-        ttk.Label(line_input_frame, text="Elevation:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline2_elevation_var'):
-            self.hline2_elevation_var = tk.DoubleVar(value=0.0)
-        line_elevation_entry = ttk.Entry(line_input_frame, textvariable=self.hline2_elevation_var, width=10)
-        line_elevation_entry.pack(side='left', padx=5)
+            color_btn = tk.Button(line_input_frame, text="Color",
+                                  bg=hl['color'].get(), activebackground=hl['color'].get())
+            color_btn.pack(side='left', padx=5)
 
-        # Line minimum x value label and entry
-        ttk.Label(line_input_frame, text="X min:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline2_xmin_var'):
-            self.hline2_xmin_var = tk.DoubleVar(value=self.fv_df['length'].min() if self.fv_df is not None else 0.0)
-        line_xmin_entry = ttk.Entry(line_input_frame, textvariable=self.hline2_xmin_var, width=10)
-        line_xmin_entry.pack(side='left', padx=5)
+            def _make_color_cb(h=hl, b=color_btn):
+                def choose():
+                    current = h['color'].get()
+                    display = current if current not in ['#000000', '#000', 'black'] else '#FF0000'
+                    chosen = colorchooser.askcolor(color=display, title="Choose color for horizontal line")[1]
+                    if chosen:
+                        h['color'].set(chosen)
+                        b.config(bg=chosen, activebackground=chosen)
+                return choose
+            color_btn.config(command=_make_color_cb())
 
-        # Line maximum x value label and entry
-        ttk.Label(line_input_frame, text="X max:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline2_xmax_var'):
-            self.hline2_xmax_var = tk.DoubleVar(value=self.fv_df['length'].max() if self.fv_df is not None else 0.0)
-        line_xmax_entry = ttk.Entry(line_input_frame, textvariable=self.hline2_xmax_var, width=10)
-        line_xmax_entry.pack(side='left', padx=5)
-
-        # Line style drop down entry
-        ttk.Label(line_input_frame, text="Style:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline2_style_var'):
-            self.hline2_style_var = StringVar(value="solid")
-        line_style_options = ["solid", "dashed", "dashdot", "dotted"]
-        line_style_menu = ttk.OptionMenu(line_input_frame, self.hline2_style_var, self.hline2_style_var.get(), *line_style_options)
-        line_style_menu.pack(side='left', padx=5)
-
-        # Line color selection button
-        if not hasattr(self, 'hline2_color_var'):
-            self.hline2_color_var = StringVar(value="#FF0000")  # Default to red
-        def choose_hline2_color():
-            current_color = self.hline2_color_var.get()
-            display_color = current_color if current_color not in ['#000000', '#000', 'black'] else '#FF0000'
-            chosen = colorchooser.askcolor(color=display_color, title="Choose color for horizontal line")[1]
-            if chosen:
-                self.hline2_color_var.set(chosen)
-                hline2_color_btn.config(bg=chosen, activebackground=chosen)  
-   
-
-        hline2_color_btn = tk.Button(line_input_frame, text="Color", command=choose_hline2_color, bg=self.hline2_color_var.get(), activebackground=self.hline2_color_var.get())
-        hline2_color_btn.pack(side='left', padx=5)
-
-        # Add checkbox to enable/disable the horizontal line
-        if not hasattr(self, 'hline2_enabled_var'):
-            self.hline2_enabled_var = tk.BooleanVar(value=False)
-        hline2_enabled_check = ttk.Checkbutton(line_input_frame, text="Enable", variable=self.hline2_enabled_var)
-        hline2_enabled_check.pack(side='left', padx=5)
-
-        # Add name and elevation inputs for horizontal lines 3
-        line_input_frame = ttk.Frame(line_frame)
-        line_input_frame.pack(fill='x', padx=10, pady=5)
-
-        # Line name label and entry
-        ttk.Label(line_input_frame, text="Name:").pack(side='left', padx=(0, 5))
-        if not hasattr(self, 'hline3_name_var'):
-            self.hline3_name_var = StringVar(value="")
-        line_name_entry = ttk.Entry(line_input_frame, textvariable=self.hline3_name_var, width=20)
-        line_name_entry.pack(side='left', padx=5)
-
-        # Line elevation label and entry
-        ttk.Label(line_input_frame, text="Elevation:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline3_elevation_var'):
-            self.hline3_elevation_var = tk.DoubleVar(value=0.0)
-        line_elevation_entry = ttk.Entry(line_input_frame, textvariable=self.hline3_elevation_var, width=10)
-        line_elevation_entry.pack(side='left', padx=5)
-
-        # Line minimum x value label and entry
-        ttk.Label(line_input_frame, text="X min:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline3_xmin_var'):
-            self.hline3_xmin_var = tk.DoubleVar(value=self.fv_df['length'].min() if self.fv_df is not None else 0.0)
-        line_xmin_entry = ttk.Entry(line_input_frame, textvariable=self.hline3_xmin_var, width=10)
-        line_xmin_entry.pack(side='left', padx=5)
-
-        # Line maximum x value label and entry
-        ttk.Label(line_input_frame, text="X max:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline3_xmax_var'):
-            self.hline3_xmax_var = tk.DoubleVar(value=self.fv_df['length'].max() if self.fv_df is not None else 0.0)
-        line_xmax_entry = ttk.Entry(line_input_frame, textvariable=self.hline3_xmax_var, width=10)
-        line_xmax_entry.pack(side='left', padx=5)
-
-        # Line style drop down entry
-        ttk.Label(line_input_frame, text="Style:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline3_style_var'):
-            self.hline3_style_var = StringVar(value="solid")
-        line_style_options = ["solid", "dashed", "dashdot", "dotted"]
-        line_style_menu = ttk.OptionMenu(line_input_frame, self.hline3_style_var, self.hline3_style_var.get(), *line_style_options)
-        line_style_menu.pack(side='left', padx=5)
-
-        # Line color selection button
-        if not hasattr(self, 'hline3_color_var'):
-            self.hline3_color_var = StringVar(value="#FF0000")  # Default to red
-        def choose_hline3_color():
-            current_color = self.hline3_color_var.get()
-            display_color = current_color if current_color not in ['#000000', '#000', 'black'] else '#FF0000'
-            chosen = colorchooser.askcolor(color=display_color, title="Choose color for horizontal line")[1]
-            if chosen:
-                self.hline3_color_var.set(chosen)
-                hline3_color_btn.config(bg=chosen, activebackground=chosen)  
-   
-
-        hline3_color_btn = tk.Button(line_input_frame, text="Color", command=choose_hline3_color, bg=self.hline3_color_var.get(), activebackground=self.hline3_color_var.get())
-        hline3_color_btn.pack(side='left', padx=5)
-
-        # Add checkbox to enable/disable the horizontal line
-        if not hasattr(self, 'hline3_enabled_var'):
-            self.hline3_enabled_var = tk.BooleanVar(value=False)
-        hline3_enabled_check = ttk.Checkbutton(line_input_frame, text="Enable", variable=self.hline3_enabled_var)
-        hline3_enabled_check.pack(side='left', padx=5)
-
-
-        # Add name and elevation inputs for horizontal lines 4
-        line_input_frame = ttk.Frame(line_frame)
-        line_input_frame.pack(fill='x', padx=10, pady=5)
-
-        # Line name label and entry
-        ttk.Label(line_input_frame, text="Name:").pack(side='left', padx=(0, 5))
-        if not hasattr(self, 'hline4_name_var'):
-            self.hline4_name_var = StringVar(value="")
-        line_name_entry = ttk.Entry(line_input_frame, textvariable=self.hline4_name_var, width=20)
-        line_name_entry.pack(side='left', padx=5)
-
-        # Line elevation label and entry
-        ttk.Label(line_input_frame, text="Elevation:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline4_elevation_var'):
-            self.hline4_elevation_var = tk.DoubleVar(value=0.0)
-        line_elevation_entry = ttk.Entry(line_input_frame, textvariable=self.hline4_elevation_var, width=10)
-        line_elevation_entry.pack(side='left', padx=5)
-
-        # Line minimum x value label and entry
-        ttk.Label(line_input_frame, text="X min:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline4_xmin_var'):
-            self.hline4_xmin_var = tk.DoubleVar(value=self.fv_df['length'].min() if self.fv_df is not None else 0.0)
-        line_xmin_entry = ttk.Entry(line_input_frame, textvariable=self.hline4_xmin_var, width=10)
-        line_xmin_entry.pack(side='left', padx=5)
-
-        # Line maximum x value label and entry
-        ttk.Label(line_input_frame, text="X max:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline4_xmax_var'):
-            self.hline4_xmax_var = tk.DoubleVar(value=self.fv_df['length'].max() if self.fv_df is not None else 0.0)
-        line_xmax_entry = ttk.Entry(line_input_frame, textvariable=self.hline4_xmax_var, width=10)
-        line_xmax_entry.pack(side='left', padx=5)
-
-        # Line style drop down entry
-        ttk.Label(line_input_frame, text="Style:").pack(side='left', padx=(10, 5))
-        if not hasattr(self, 'hline4_style_var'):
-            self.hline4_style_var = StringVar(value="solid")
-        line_style_options = ["solid", "dashed", "dashdot", "dotted"]
-        line_style_menu = ttk.OptionMenu(line_input_frame, self.hline4_style_var, self.hline4_style_var.get(), *line_style_options)
-        line_style_menu.pack(side='left', padx=5)
-
-        # Line color selection button
-        if not hasattr(self, 'hline4_color_var'):
-            self.hline4_color_var = StringVar(value="#FF0000")  # Default to red
-        def choose_hline4_color():
-            current_color = self.hline4_color_var.get()
-            display_color = current_color if current_color not in ['#000000', '#000', 'black'] else '#FF0000'
-            chosen = colorchooser.askcolor(color=display_color, title="Choose color for horizontal line")[1]
-            if chosen:
-                self.hline4_color_var.set(chosen)
-                hline4_color_btn.config(bg=chosen, activebackground=chosen)  
-   
-
-        hline4_color_btn = tk.Button(line_input_frame, text="Color", command=choose_hline4_color, bg=self.hline4_color_var.get(), activebackground=self.hline4_color_var.get())
-        hline4_color_btn.pack(side='left', padx=5)
-
-        # Add checkbox to enable/disable the horizontal line
-        if not hasattr(self, 'hline4_enabled_var'):
-            self.hline4_enabled_var = tk.BooleanVar(value=False)
-        hline4_enabled_check = ttk.Checkbutton(line_input_frame, text="Enable", variable=self.hline4_enabled_var)
-        hline4_enabled_check.pack(side='left', padx=5)
+            ttk.Checkbutton(line_input_frame, text="Enable", variable=hl['enabled']).pack(side='left', padx=5)
 
 
 
@@ -1536,9 +1477,11 @@ class EFA_juxtaposition(tk.Tk):
             # Generate all plots
             self.setup_all_plots()
             
-            messagebox.showinfo("Success", "All plots generated successfully! Check the plot tabs.")
+            if not self._suppress_dialogs:
+                messagebox.showinfo("Success", "All plots generated successfully! Check the plot tabs.")
             
         except Exception as e:
+            print(f"Failed to generate plots: {e}")
             messagebox.showerror("Error", f"Failed to generate plots: {str(e)}\n\nPlease ensure you have:\n1. Loaded data\n2. Converted to length/depth\n3. Executed horizon shift")
     
     def setup_plot_data(self):
@@ -2861,34 +2804,7 @@ class EFA_juxtaposition(tk.Tk):
                 'juxt_unit_leg_var': getattr(self, 'juxt_unit_leg_var', BooleanVar(value=True)).get() if hasattr(self, 'juxt_unit_leg_var') else True,
                 'unit_invertx_var': getattr(self, 'unit_invertx_var', BooleanVar(value=False)).get() if hasattr(self, 'unit_invertx_var') else False,
                 # Horizontal line variables
-                'hline_enabled_var': getattr(self, 'hline_enabled_var', BooleanVar(value=False)).get() if hasattr(self, 'hline_enabled_var') else False,
-                'hline2_enabled_var': getattr(self, 'hline2_enabled_var', BooleanVar(value=False)).get() if hasattr(self, 'hline2_enabled_var') else False,
-                'hline3_enabled_var': getattr(self, 'hline3_enabled_var', BooleanVar(value=False)).get() if hasattr(self, 'hline3_enabled_var') else False,
-                'hline4_enabled_var': getattr(self, 'hline4_enabled_var', BooleanVar(value=False)).get() if hasattr(self, 'hline4_enabled_var') else False,
-                'hline_elevation_var': getattr(self, 'hline_elevation_var', tk.DoubleVar(value=0.0)).get() if hasattr(self, 'hline_elevation_var') else 0.0,
-                'hline2_elevation_var': getattr(self, 'hline2_elevation_var', tk.DoubleVar(value=0.0)).get() if hasattr(self, 'hline2_elevation_var') else 0.0,
-                'hline3_elevation_var': getattr(self, 'hline3_elevation_var', tk.DoubleVar(value=0.0)).get() if hasattr(self, 'hline3_elevation_var') else 0.0,
-                'hline4_elevation_var': getattr(self, 'hline4_elevation_var', tk.DoubleVar(value=0.0)).get() if hasattr(self, 'hline4_elevation_var') else 0.0,
-                'hline_xmin_var': getattr(self, 'hline_xmin_var', tk.DoubleVar(value=0.0)).get() if hasattr(self, 'hline_xmin_var') else 0.0,
-                'hline2_xmin_var': getattr(self, 'hline2_xmin_var', tk.DoubleVar(value=0.0)).get() if hasattr(self, 'hline2_xmin_var') else 0.0,
-                'hline3_xmin_var': getattr(self, 'hline3_xmin_var', tk.DoubleVar(value=0.0)).get() if hasattr(self, 'hline3_xmin_var') else 0.0,
-                'hline4_xmin_var': getattr(self, 'hline4_xmin_var', tk.DoubleVar(value=0.0)).get() if hasattr(self, 'hline4_xmin_var') else 0.0,
-                'hline_xmax_var': getattr(self, 'hline_xmax_var', tk.DoubleVar(value=1000.0)).get() if hasattr(self, 'hline_xmax_var') else 1000.0,
-                'hline2_xmax_var': getattr(self, 'hline2_xmax_var', tk.DoubleVar(value=1000.0)).get() if hasattr(self, 'hline2_xmax_var') else 1000.0,
-                'hline3_xmax_var': getattr(self, 'hline3_xmax_var', tk.DoubleVar(value=1000.0)).get() if hasattr(self, 'hline3_xmax_var') else 1000.0,
-                'hline4_xmax_var': getattr(self, 'hline4_xmax_var', tk.DoubleVar(value=1000.0)).get() if hasattr(self, 'hline4_xmax_var') else 1000.0,
-                'hline_color_var': getattr(self, 'hline_color_var', StringVar(value='red')).get() if hasattr(self, 'hline_color_var') else 'red',
-                'hline2_color_var': getattr(self, 'hline2_color_var', StringVar(value='blue')).get() if hasattr(self, 'hline2_color_var') else 'blue',
-                'hline3_color_var': getattr(self, 'hline3_color_var', StringVar(value='green')).get() if hasattr(self, 'hline3_color_var') else 'green',
-                'hline4_color_var': getattr(self, 'hline4_color_var', StringVar(value='orange')).get() if hasattr(self, 'hline4_color_var') else 'orange',
-                'hline_style_var': getattr(self, 'hline_style_var', StringVar(value='solid')).get() if hasattr(self, 'hline_style_var') else 'solid',
-                'hline2_style_var': getattr(self, 'hline2_style_var', StringVar(value='solid')).get() if hasattr(self, 'hline2_style_var') else 'solid',
-                'hline3_style_var': getattr(self, 'hline3_style_var', StringVar(value='solid')).get() if hasattr(self, 'hline3_style_var') else 'solid',
-                'hline4_style_var': getattr(self, 'hline4_style_var', StringVar(value='solid')).get() if hasattr(self, 'hline4_style_var') else 'solid',
-                'hline_name_var': getattr(self, 'hline_name_var', StringVar(value='H-Line 1')).get() if hasattr(self, 'hline_name_var') else 'H-Line 1',
-                'hline2_name_var': getattr(self, 'hline2_name_var', StringVar(value='H-Line 2')).get() if hasattr(self, 'hline2_name_var') else 'H-Line 2',
-                'hline3_name_var': getattr(self, 'hline3_name_var', StringVar(value='H-Line 3')).get() if hasattr(self, 'hline3_name_var') else 'H-Line 3',
-                'hline4_name_var': getattr(self, 'hline4_name_var', StringVar(value='H-Line 4')).get() if hasattr(self, 'hline4_name_var') else 'H-Line 4',
+                'hlines': [{key: v.get() for key, v in hl.items()} for hl in self.hlines],
             }
             
             # Save to pickle file
@@ -3009,122 +2925,13 @@ class EFA_juxtaposition(tk.Tk):
             if hasattr(self, 'unit_invertx_var'):
                 self.unit_invertx_var.set(session_data.get('unit_invertx_var', False))
             
-            # Restore horizontal line variables (backwards compatible - create if they don't exist)
-            # Line 1
-            if not hasattr(self, 'hline_enabled_var'):
-                self.hline_enabled_var = tk.BooleanVar(value=False)
-            self.hline_enabled_var.set(session_data.get('hline_enabled_var', False))
-            
-            if not hasattr(self, 'hline_elevation_var'):
-                self.hline_elevation_var = tk.DoubleVar(value=0.0)
-            self.hline_elevation_var.set(session_data.get('hline_elevation_var', 0.0))
-            
-            if not hasattr(self, 'hline_xmin_var'):
-                self.hline_xmin_var = tk.DoubleVar(value=0.0)
-            self.hline_xmin_var.set(session_data.get('hline_xmin_var', 0.0))
-            
-            if not hasattr(self, 'hline_xmax_var'):
-                self.hline_xmax_var = tk.DoubleVar(value=1000.0)
-            self.hline_xmax_var.set(session_data.get('hline_xmax_var', 1000.0))
-            
-            if not hasattr(self, 'hline_color_var'):
-                self.hline_color_var = StringVar(value='red')
-            self.hline_color_var.set(session_data.get('hline_color_var', 'red'))
-            
-            if not hasattr(self, 'hline_style_var'):
-                self.hline_style_var = StringVar(value='solid')
-            self.hline_style_var.set(session_data.get('hline_style_var', 'solid'))
-            
-            if not hasattr(self, 'hline_name_var'):
-                self.hline_name_var = StringVar(value='H-Line 1')
-            self.hline_name_var.set(session_data.get('hline_name_var', 'H-Line 1'))
-            
-            # Line 2
-            if not hasattr(self, 'hline2_enabled_var'):
-                self.hline2_enabled_var = tk.BooleanVar(value=False)
-            self.hline2_enabled_var.set(session_data.get('hline2_enabled_var', False))
-            
-            if not hasattr(self, 'hline2_elevation_var'):
-                self.hline2_elevation_var = tk.DoubleVar(value=0.0)
-            self.hline2_elevation_var.set(session_data.get('hline2_elevation_var', 0.0))
-            
-            if not hasattr(self, 'hline2_xmin_var'):
-                self.hline2_xmin_var = tk.DoubleVar(value=0.0)
-            self.hline2_xmin_var.set(session_data.get('hline2_xmin_var', 0.0))
-            
-            if not hasattr(self, 'hline2_xmax_var'):
-                self.hline2_xmax_var = tk.DoubleVar(value=1000.0)
-            self.hline2_xmax_var.set(session_data.get('hline2_xmax_var', 1000.0))
-            
-            if not hasattr(self, 'hline2_color_var'):
-                self.hline2_color_var = StringVar(value='blue')
-            self.hline2_color_var.set(session_data.get('hline2_color_var', 'blue'))
-            
-            if not hasattr(self, 'hline2_style_var'):
-                self.hline2_style_var = StringVar(value='solid')
-            self.hline2_style_var.set(session_data.get('hline2_style_var', 'solid'))
-            
-            if not hasattr(self, 'hline2_name_var'):
-                self.hline2_name_var = StringVar(value='H-Line 2')
-            self.hline2_name_var.set(session_data.get('hline2_name_var', 'H-Line 2'))
-            
-            # Line 3
-            if not hasattr(self, 'hline3_enabled_var'):
-                self.hline3_enabled_var = tk.BooleanVar(value=False)
-            self.hline3_enabled_var.set(session_data.get('hline3_enabled_var', False))
-            
-            if not hasattr(self, 'hline3_elevation_var'):
-                self.hline3_elevation_var = tk.DoubleVar(value=0.0)
-            self.hline3_elevation_var.set(session_data.get('hline3_elevation_var', 0.0))
-            
-            if not hasattr(self, 'hline3_xmin_var'):
-                self.hline3_xmin_var = tk.DoubleVar(value=0.0)
-            self.hline3_xmin_var.set(session_data.get('hline3_xmin_var', 0.0))
-            
-            if not hasattr(self, 'hline3_xmax_var'):
-                self.hline3_xmax_var = tk.DoubleVar(value=1000.0)
-            self.hline3_xmax_var.set(session_data.get('hline3_xmax_var', 1000.0))
-            
-            if not hasattr(self, 'hline3_color_var'):
-                self.hline3_color_var = StringVar(value='green')
-            self.hline3_color_var.set(session_data.get('hline3_color_var', 'green'))
-            
-            if not hasattr(self, 'hline3_style_var'):
-                self.hline3_style_var = StringVar(value='solid')
-            self.hline3_style_var.set(session_data.get('hline3_style_var', 'solid'))
-            
-            if not hasattr(self, 'hline3_name_var'):
-                self.hline3_name_var = StringVar(value='H-Line 3')
-            self.hline3_name_var.set(session_data.get('hline3_name_var', 'H-Line 3'))
-            
-            # Line 4
-            if not hasattr(self, 'hline4_enabled_var'):
-                self.hline4_enabled_var = tk.BooleanVar(value=False)
-            self.hline4_enabled_var.set(session_data.get('hline4_enabled_var', False))
-            
-            if not hasattr(self, 'hline4_elevation_var'):
-                self.hline4_elevation_var = tk.DoubleVar(value=0.0)
-            self.hline4_elevation_var.set(session_data.get('hline4_elevation_var', 0.0))
-            
-            if not hasattr(self, 'hline4_xmin_var'):
-                self.hline4_xmin_var = tk.DoubleVar(value=0.0)
-            self.hline4_xmin_var.set(session_data.get('hline4_xmin_var', 0.0))
-            
-            if not hasattr(self, 'hline4_xmax_var'):
-                self.hline4_xmax_var = tk.DoubleVar(value=1000.0)
-            self.hline4_xmax_var.set(session_data.get('hline4_xmax_var', 1000.0))
-            
-            if not hasattr(self, 'hline4_color_var'):
-                self.hline4_color_var = StringVar(value='orange')
-            self.hline4_color_var.set(session_data.get('hline4_color_var', 'orange'))
-            
-            if not hasattr(self, 'hline4_style_var'):
-                self.hline4_style_var = StringVar(value='solid')
-            self.hline4_style_var.set(session_data.get('hline4_style_var', 'solid'))
-            
-            if not hasattr(self, 'hline4_name_var'):
-                self.hline4_name_var = StringVar(value='H-Line 4')
-            self.hline4_name_var.set(session_data.get('hline4_name_var', 'H-Line 4'))
+            # Restore horizontal line variables
+            saved_hlines = session_data.get('hlines')
+            if saved_hlines:
+                for hl, saved in zip(self.hlines, saved_hlines):
+                    for key, v in hl.items():
+                        if key in saved:
+                            v.set(saved[key])
             
             # Refresh all displays
             self.refresh_all_displays()
@@ -3349,6 +3156,92 @@ class EFA_juxtaposition(tk.Tk):
         for fname in self.innfiles:
             display_name = fname.split('/')[-1] if '/' in fname else fname.split('\\')[-1]
             self.datafiles_listbox.insert(tk.END, display_name)
+
+    def load_config(self, path: str):
+        """Load a JSON config file and apply it to the GUI state, then schedule auto-run."""
+        try:
+            with open(path, 'r') as f:
+                raw = json.load(f)
+        except Exception as e:
+            print(f"Failed to read config file {path}: {e}")
+            return
+
+        cfg = EFAConfig.from_dict(raw if raw else {})
+
+        # --- Input settings ---
+        self.innfiles = [str(p) for p in cfg.input.horizon_files]
+        self.file_format.set(cfg.input.file_format)
+        self.z_select.set(cfg.input.z_field)
+
+        # --- Plot settings ---
+        if cfg.plot_settings.title:
+            self.plot_name.set(cfg.plot_settings.title)
+        self.width.set(cfg.plot_settings.width)
+        self.height.set(cfg.plot_settings.height)
+        self.linewidth.set(cfg.plot_settings.linewidth)
+        self.gridlines.set(cfg.plot_settings.gridlines)
+
+        # Reference lines (up to 4)
+        for hl, rl in zip(self.hlines, cfg.plot_settings.reference_lines[:4]):
+            hl['name'].set(rl.name)
+            hl['elevation'].set(rl.elevation)
+            hl['xmin'].set(rl.xmin)
+            hl['xmax'].set(rl.xmax)
+            hl['style'].set(rl.style)
+            hl['color'].set(rl.color)
+            hl['enabled'].set(rl.enabled)
+
+        # --- Horizon settings (keyed by basename) ---
+        for basename, color in cfg.horizon_settings.colors.items():
+            self.horizon_colors[basename] = color
+        for basename, alias in cfg.horizon_settings.aliases.items():
+            self.horizon_aliases[basename] = alias
+
+        # --- Zone settings ---
+        for zone_key, alias in cfg.zone_settings.aliases.items():
+            self.zone_names_aliases[zone_key] = alias
+        for zone_alias, color in cfg.zone_settings.unit_colors.items():
+            self.zone_unit_colors[zone_alias] = color
+
+        # Apply lithology overrides
+        lith_map = {
+            'Good': 'yellow', 'Poor': 'orange', 'No Res': 'black',
+            'SR': 'red', 'Undefined': 'azure',
+        }
+        for zone_key, lith_name in cfg.zone_settings.lithology.items():
+            if lith_name in lith_map:
+                self.zone_colors[zone_key] = lith_map[lith_name]
+
+        # Store workflow steps and refresh listbox
+        self._config_workflow_steps = list(cfg.workflow.steps)
+        self.update_file_listbox()
+
+        # Schedule auto-run after GUI is ready
+        if self._config_workflow_steps:
+            self.wait_visibility()
+            self.after_idle(self._run_workflow_from_config)
+
+    def _run_workflow_from_config(self):
+        """Execute workflow steps defined in the config file, then switch to Scenario Plot tab."""
+        self._suppress_dialogs = True
+        step_map = {
+            'load_data': self.load_data,
+            'convert_to_length_depth': self.xyz_to_length_depth,
+            'execute_shift': self.execute_shift,
+            'generate_plots': self.generate_plots,
+        }
+        try:
+            for step in self._config_workflow_steps:
+                fn = step_map.get(step)
+                if fn is None:
+                    print(f"Unknown workflow step: {step!r}")
+                    continue
+                print(f"[config workflow] running step: {step}")
+                fn()
+            # Switch to Scenario Plot tab (index 6)
+            self.notebook.select(6)
+        finally:
+            self._suppress_dialogs = False
 
     def qc_plot_method(self, title='', figsize=(6,12), gridlines=1, linewidth=1, z_select='Z'):
         """
@@ -3593,20 +3486,13 @@ class EFA_juxtaposition(tk.Tk):
             for i in range(1,fv_df.shape[1]):
                 plt.plot(hv_df['length'],hv_df.iloc[:,i],color=h_color.loc[i-1,'Color'] ,linestyle='--', alpha = 0.1, linewidth = linewidth)
         
-         # Draw horizontal lines if enabled 
-        if self.hline_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline_elevation_var.get(), xmin=self.hline_xmin_var.get(), xmax=self.hline_xmax_var.get(), colors=self.hline_color_var.get(), linestyles=self.hline_style_var.get(), linewidth=1.5, label=self.hline_name_var.get())
-        
-        if self.hline2_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline2_elevation_var.get(), xmin=self.hline2_xmin_var.get(), xmax=self.hline2_xmax_var.get(), colors=self.hline2_color_var.get(), linestyles=self.hline2_style_var.get(), linewidth=1.5, label=self.hline2_name_var.get())
-        
-        if self.hline3_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline3_elevation_var.get(), xmin=self.hline3_xmin_var.get(), xmax=self.hline3_xmax_var.get(), colors=self.hline3_color_var.get(), linestyles=self.hline3_style_var.get(), linewidth=1.5, label=self.hline3_name_var.get())
+        # Draw horizontal lines if enabled
+        for hl in self.hlines:
+            if hl['enabled'].get() and hl['color'].get().lower() != 'none':
+                plt.hlines(y=hl['elevation'].get(), xmin=hl['xmin'].get(), xmax=hl['xmax'].get(),
+                           colors=hl['color'].get(), linestyles=hl['style'].get(), linewidth=1.5,
+                           label=hl['name'].get())
 
-        if self.hline4_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline4_elevation_var.get(), xmin=self.hline4_xmin_var.get(), xmax=self.hline4_xmax_var.get(), colors=self.hline4_color_var.get(), linestyles=self.hline4_style_var.get(), linewidth=1.5, label=self.hline4_name_var.get())
-
-        
         if disp_orgpoints == 1:
             for i in range(len(list(ld_dict.keys()))):
                 #print(list(ld_dict.keys())[i])
@@ -3785,18 +3671,12 @@ class EFA_juxtaposition(tk.Tk):
             for i in range(1, fv_df.shape[1]):
                 plt.plot(hv_df['length'], hv_df.iloc[:,i], color=h_color.loc[i-1,'Color'], linestyle='--', alpha=0.1, linewidth=linewidth)
 
-        # Draw horizontal lines if enabled 
-        if self.hline_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline_elevation_var.get(), xmin=self.hline_xmin_var.get(), xmax=self.hline_xmax_var.get(), colors=self.hline_color_var.get(), linestyles=self.hline_style_var.get(), linewidth=1.5, label=self.hline_name_var.get())
-        
-        if self.hline2_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline2_elevation_var.get(), xmin=self.hline2_xmin_var.get(), xmax=self.hline2_xmax_var.get(), colors=self.hline2_color_var.get(), linestyles=self.hline2_style_var.get(), linewidth=1.5, label=self.hline2_name_var.get())
-        
-        if self.hline3_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline3_elevation_var.get(), xmin=self.hline3_xmin_var.get(), xmax=self.hline3_xmax_var.get(), colors=self.hline3_color_var.get(), linestyles=self.hline3_style_var.get(), linewidth=1.5, label=self.hline3_name_var.get())
-
-        if self.hline4_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline4_elevation_var.get(), xmin=self.hline4_xmin_var.get(), xmax=self.hline4_xmax_var.get(), colors=self.hline4_color_var.get(), linestyles=self.hline4_style_var.get(), linewidth=1.5, label=self.hline4_name_var.get())
+        # Draw horizontal lines if enabled
+        for hl in self.hlines:
+            if hl['enabled'].get() and hl['color'].get().lower() != 'none':
+                plt.hlines(y=hl['elevation'].get(), xmin=hl['xmin'].get(), xmax=hl['xmax'].get(),
+                           colors=hl['color'].get(), linestyles=hl['style'].get(), linewidth=1.5,
+                           label=hl['name'].get())
 
         if disp_orgpoints == 1:
             for i in range(len(list(ld_dict.keys()))):
@@ -4020,19 +3900,12 @@ class EFA_juxtaposition(tk.Tk):
             for jindex, jrow in juxt_df.iterrows():
                 plt.text(jrow['Length'], jrow['Elevation'],jindex, color = 'darkred')
 
-         # Draw horizontal lines if enabled 
-        if self.hline_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline_elevation_var.get(), xmin=self.hline_xmin_var.get(), xmax=self.hline_xmax_var.get(), colors=self.hline_color_var.get(), linestyles=self.hline_style_var.get(), linewidth=1.5, label=self.hline_name_var.get())
-        
-        if self.hline2_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline2_elevation_var.get(), xmin=self.hline2_xmin_var.get(), xmax=self.hline2_xmax_var.get(), colors=self.hline2_color_var.get(), linestyles=self.hline2_style_var.get(), linewidth=1.5, label=self.hline2_name_var.get())
-        
-        if self.hline3_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline3_elevation_var.get(), xmin=self.hline3_xmin_var.get(), xmax=self.hline3_xmax_var.get(), colors=self.hline3_color_var.get(), linestyles=self.hline3_style_var.get(), linewidth=1.5, label=self.hline3_name_var.get())
-
-        if self.hline4_enabled_var.get() and self.hline_color_var.get().lower() != 'none':
-            plt.hlines(y=self.hline4_elevation_var.get(), xmin=self.hline4_xmin_var.get(), xmax=self.hline4_xmax_var.get(), colors=self.hline4_color_var.get(), linestyles=self.hline4_style_var.get(), linewidth=1.5, label=self.hline4_name_var.get())
-
+        # Draw horizontal lines if enabled
+        for hl in self.hlines:
+            if hl['enabled'].get() and hl['color'].get().lower() != 'none':
+                plt.hlines(y=hl['elevation'].get(), xmin=hl['xmin'].get(), xmax=hl['xmax'].get(),
+                           colors=hl['color'].get(), linestyles=hl['style'].get(), linewidth=1.5,
+                           label=hl['name'].get())
 
         if disp_orgpoints == 1:
             for i in range(len(list(ld_dict.keys()))):
@@ -5382,7 +5255,15 @@ def interpolate_throw(fv_df, juxt_df, throwarray, h_color=None):
 
 
 def main():
-    app = EFA_juxtaposition()
+    parser = argparse.ArgumentParser(description="EFA Juxtaposition Analysis")
+    parser.add_argument(
+        '--config',
+        metavar='CONFIG_JSON',
+        default=None,
+        help='Path to a JSON config file for headless-style auto-run startup.',
+    )
+    args = parser.parse_args()
+    app = EFA_juxtaposition(config_path=args.config)
     app.mainloop()
 
 
