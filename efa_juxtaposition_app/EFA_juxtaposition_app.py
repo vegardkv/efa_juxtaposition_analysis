@@ -1599,9 +1599,6 @@ class EFA_juxtaposition(tk.Tk):
         except:
             pass
         
-        # Close any existing figures to prevent memory leaks
-        plt.close('all')
-        
         try:
             fig4, self.throwrange_df, self.throwarray = self.throw_plot_method()
             
@@ -1710,9 +1707,6 @@ class EFA_juxtaposition(tk.Tk):
                 widget.destroy()
         except:
             pass
-        
-        # Close any existing figures to prevent memory leaks
-        plt.close('all')
         
         try:
             fig_unit = self.zone_unit_plot_method()
@@ -1825,9 +1819,6 @@ class EFA_juxtaposition(tk.Tk):
                 widget.destroy()
         except:
             pass
-        
-        # Close any existing figures to prevent memory leaks
-        plt.close('all')
         
         try:
             fig2 = self.zone_color_plot_method()
@@ -1952,9 +1943,6 @@ class EFA_juxtaposition(tk.Tk):
                 widget.destroy()
         except:
             pass
-        
-        # Close any existing figures to prevent memory leaks
-        plt.close('all')
         
         try:
             fig3, self.juxtlist, warning = self.zone_juxtscenario_plot_method()
@@ -2087,9 +2075,6 @@ class EFA_juxtaposition(tk.Tk):
                     widget.destroy()
             except:
                 pass
-            
-            # Close any existing legend figures to prevent memory leaks
-            plt.close('all')
             
             ttk.Label(sidebar, text="Legend", font=('Arial', 12, 'bold')).pack(pady=10)
             
@@ -3264,7 +3249,8 @@ class EFA_juxtaposition(tk.Tk):
                 
             # create two sub plots stacked vertically
             title = 'QC Plot - ' + title
-            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
+            fig = Figure(figsize=figsize)
+            ax1, ax2 = fig.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
 
             # First subplot: juxtaposition plot
             for i in range(len(list(ld_dict.keys()))):
@@ -3312,7 +3298,7 @@ class EFA_juxtaposition(tk.Tk):
                 if gridlines:
                     ax2.grid(True, alpha=0.3)
             
-            plt.tight_layout()
+            fig.tight_layout()
             return fig
             
         except Exception as e:
@@ -3349,7 +3335,8 @@ class EFA_juxtaposition(tk.Tk):
             z_select = self.z_select.get()
             
         title = 'Throw - ' + title
-        fig = plt.figure(figsize=figsize)
+        fig = Figure(figsize=figsize)
+        ax = fig.add_subplot(111)
         throwrange = []
         throwlist = []
         for i in range(1,fv_df.shape[1]):
@@ -3357,7 +3344,7 @@ class EFA_juxtaposition(tk.Tk):
             throwlist.append(throw)
             # Add label for legend (use Alias if available, otherwise Horizon name)
             horizon_label = h_color.loc[i-1,'Alias'] if h_color.loc[i-1,'Alias'] else h_color.loc[i-1,'Horizon']
-            plt.plot(fv_df['length'],throw,color=h_color.loc[i-1,'Color'], linewidth = linewidth, label=horizon_label)
+            ax.plot(fv_df['length'],throw,color=h_color.loc[i-1,'Color'], linewidth = linewidth, label=horizon_label)
             tmin = round(np.nanmin(fv_df.iloc[:,i]-hv_df.iloc[:,i]),1)
             tmean = round(np.nanmean(fv_df.iloc[:,i]-hv_df.iloc[:,i]),1)
             tmax = round(np.nanmax(fv_df.iloc[:,i]-hv_df.iloc[:,i]),1)
@@ -3368,31 +3355,31 @@ class EFA_juxtaposition(tk.Tk):
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
                 mean_throw = np.nanmean(throwarray, axis=0)
-            plt.plot(fv_df['length'], mean_throw, color='black', linestyle='dotted', label='Mean Throw')
+            ax.plot(fv_df['length'], mean_throw, color='black', linestyle='dotted', label='Mean Throw')
             
-        plt.xlabel(f"Distance along mean strike ({self.unit_xy})")
-        plt.ylabel(f"Throw ({self.z_select_to_unit()})")
+        ax.set_xlabel(f"Distance along mean strike ({self.unit_xy})")
+        ax.set_ylabel(f"Throw ({self.z_select_to_unit()})")
         # Place text in the upper left corner of the plot
-        plt.title(title)
+        ax.set_title(title)
         #Get compass directions from strike
         ur, ul = strike_to_compass(self.strike)
         # invert x axis if specified, invert compas directions
         if invertx:
-            plt.gca().invert_xaxis()
-            plt.title(ul, loc='right')
-            plt.title(ur, loc='left')
+            ax.invert_xaxis()
+            ax.set_title(ul, loc='right')
+            ax.set_title(ur, loc='left')
         else:
-            plt.title(ur, loc='right')
-            plt.title(ul, loc='left')
+            ax.set_title(ur, loc='right')
+            ax.set_title(ul, loc='left')
 
         
         # Add legend at best location if enabled
-        self.throwlegend_handles, self.throwlegend_labels = plt.gca().get_legend_handles_labels()
+        self.throwlegend_handles, self.throwlegend_labels = ax.get_legend_handles_labels()
         if showlegend:
-            plt.legend(loc='best', fontsize=8, framealpha=0.9)
+            ax.legend(loc='best', fontsize=8, framealpha=0.9)
         
         if gridlines == 1:
-            plt.grid(alpha = 0.5)
+            ax.grid(alpha = 0.5)
         throwrange_df = pd.DataFrame(throwrange,columns=['Horizon', 'Alias', 'min_Throw', 'mean_throw','max_throw'])
         return(fig,throwrange_df, throwarray)
 
@@ -3436,7 +3423,8 @@ class EFA_juxtaposition(tk.Tk):
             z_select = self.z_select.get()
             
         title = 'Lithology Juxtaposition - ' + title
-        fig = plt.figure(figsize = figsize)
+        fig = Figure(figsize=figsize)
+        ax = fig.add_subplot(111)
         
         # Track which zones are displayed for legend
         displayed_zones = set()
@@ -3446,58 +3434,48 @@ class EFA_juxtaposition(tk.Tk):
                 for i in range(2,hv_df.shape[1]):
                     zone_idx = i-2
                     if fv == 1:
-                        #plt.fill_between(fv_df['length'],fv_df.iloc[:,i-1],fv_df.iloc[:,i],color=z_color.loc[i-2,'Color'],alpha=0.5)
-                        # Extract Length and depth values for horizon i-1 where values are not nan
                         fv_length = fv_df['length'][~np.isnan(fv_df.iloc[:,i-1])].values
                         fv_depth = fv_df.iloc[:,i-1][~np.isnan(fv_df.iloc[:,i-1])].values
-                        # extract Length and depth values for horizon i where values are not nan
                         fv_length2 = fv_df['length'][~np.isnan(fv_df.iloc[:,i])].values
                         fv_depth2 = fv_df.iloc[:,i][~np.isnan(fv_df.iloc[:,i])].values
-                        # Create polygon between fv_length and fv_length2 and use plt.fill to fill polygon
-                        plt.fill(np.concatenate([fv_length, fv_length2[::-1]]),
+                        ax.fill(np.concatenate([fv_length, fv_length2[::-1]]),
                                  np.concatenate([fv_depth, fv_depth2[::-1]]),
                                  color=z_color.loc[zone_idx,'Color'], alpha=0.5)
                         displayed_zones.add(zone_idx)
 
                     if hv == 1:
-                        #plt.fill_between(hv_df['length'],hv_df.iloc[:,i-1],hv_df.iloc[:,i],color=z_color.loc[i-2,'Color'],alpha=0.5)
                         hv_length = hv_df['length'][~np.isnan(hv_df.iloc[:,i-1])].values
                         hv_depth = hv_df.iloc[:,i-1][~np.isnan(hv_df.iloc[:,i-1])].values
-                        # extract Length and depth values for horizon i where values are not nan
                         hv_length2 = hv_df['length'][~np.isnan(hv_df.iloc[:,i])].values
                         hv_depth2 = hv_df.iloc[:,i][~np.isnan(hv_df.iloc[:,i])].values
-                        # Create polygon between hv_length and hv_length2 and use plt.fill to fill polygon
-                        plt.fill(np.concatenate([hv_length, hv_length2[::-1]]),
+                        ax.fill(np.concatenate([hv_length, hv_length2[::-1]]),
                                  np.concatenate([hv_depth, hv_depth2[::-1]]),
                                  color=z_color.loc[zone_idx,'Color'], alpha=0.5)
                         displayed_zones.add(zone_idx)
         if fv == 1:
             for i in range(1,fv_df.shape[1]):
                 horizon_label = h_color.loc[i-1,'Alias'] if h_color.loc[i-1,'Alias'] else h_color.loc[i-1,'Horizon']
-                plt.plot(fv_df['length'],fv_df.iloc[:,i],color=h_color.loc[i-1,'Color'], linewidth = linewidth, label=f'{horizon_label} (FW)')
+                ax.plot(fv_df['length'],fv_df.iloc[:,i],color=h_color.loc[i-1,'Color'], linewidth = linewidth, label=f'{horizon_label} (FW)')
         if hv == 1:
             for i in range(1,fv_df.shape[1]):
                 horizon_label = h_color.loc[i-1,'Alias'] if h_color.loc[i-1,'Alias'] else h_color.loc[i-1,'Horizon']
-                plt.plot(hv_df['length'],hv_df.iloc[:,i],color=h_color.loc[i-1,'Color'] ,linestyle='--', linewidth = linewidth, label=f'{horizon_label} (HW)')
+                ax.plot(hv_df['length'],hv_df.iloc[:,i],color=h_color.loc[i-1,'Color'] ,linestyle='--', linewidth = linewidth, label=f'{horizon_label} (HW)')
         if fv == 0:
             for i in range(1,fv_df.shape[1]):
-                plt.plot(fv_df['length'],fv_df.iloc[:,i],color=h_color.loc[i-1,'Color'], alpha = 0.1, linewidth = linewidth)
+                ax.plot(fv_df['length'],fv_df.iloc[:,i],color=h_color.loc[i-1,'Color'], alpha = 0.1, linewidth = linewidth)
         if hv == 0:
             for i in range(1,fv_df.shape[1]):
-                plt.plot(hv_df['length'],hv_df.iloc[:,i],color=h_color.loc[i-1,'Color'] ,linestyle='--', alpha = 0.1, linewidth = linewidth)
+                ax.plot(hv_df['length'],hv_df.iloc[:,i],color=h_color.loc[i-1,'Color'] ,linestyle='--', alpha = 0.1, linewidth = linewidth)
         
         # Draw horizontal lines if enabled
         for hl in self.hlines:
             if hl['enabled'].get() and hl['color'].get().lower() != 'none':
-                plt.hlines(y=hl['elevation'].get(), xmin=hl['xmin'].get(), xmax=hl['xmax'].get(),
+                ax.hlines(y=hl['elevation'].get(), xmin=hl['xmin'].get(), xmax=hl['xmax'].get(),
                            colors=hl['color'].get(), linestyles=hl['style'].get(), linewidth=1.5,
                            label=hl['name'].get())
 
         if disp_orgpoints == 1:
             for i in range(len(list(ld_dict.keys()))):
-                #print(list(ld_dict.keys())[i])
-                #print(h_color)
-                #print(self.horizon_colors[list(ld_dict.keys())[i]])
                 zfv = []
                 for zfvi in range(0,len(ld_dict[list(ld_dict.keys())[i]]['fv']['l'])):
                     zfv.append(zfvi)
@@ -3512,33 +3490,33 @@ class EFA_juxtaposition(tk.Tk):
                 hv_length_list = ld_dict[list(ld_dict.keys())[i]]['hv']['l']
                 hv_depth_list = ld_dict[list(ld_dict.keys())[i]]['hv']['d']
 
-                plt.scatter(fv_length_list, fv_depth_list, marker='^', color=self.horizon_colors[list(ld_dict.keys())[i]])
-                plt.scatter(hv_length_list, hv_depth_list, marker='v', color=self.horizon_colors[list(ld_dict.keys())[i]])
+                ax.scatter(fv_length_list, fv_depth_list, marker='^', color=self.horizon_colors[list(ld_dict.keys())[i]])
+                ax.scatter(hv_length_list, hv_depth_list, marker='v', color=self.horizon_colors[list(ld_dict.keys())[i]])
 
         
-        plt.xlabel(f"Distance along mean strike ({self.unit_xy})")
-        plt.ylabel(f"Elevation ({self.z_select_to_unit()})")
-        plt.title(title)
+        ax.set_xlabel(f"Distance along mean strike ({self.unit_xy})")
+        ax.set_ylabel(f"Elevation ({self.z_select_to_unit()})")
+        ax.set_title(title)
         ur, ul = strike_to_compass(self.strike)
         # invert x axis if specified, invert compas directions
         if invertx:
-            plt.gca().invert_xaxis()
-            plt.title(ul, loc='right')
-            plt.title(ur, loc='left')
+            ax.invert_xaxis()
+            ax.set_title(ul, loc='right')
+            ax.set_title(ur, loc='left')
         else:
-            plt.title(ur, loc='right')
-            plt.title(ul, loc='left')
+            ax.set_title(ur, loc='right')
+            ax.set_title(ul, loc='left')
         
         # Add legend at best location if enabled
         if showlegend:
             # Get current legend handles and labels from the plot
-            handles, labels = plt.gca().get_legend_handles_labels()
+            handles, labels = ax.get_legend_handles_labels()
             
             # Add lithology zone patches to legend if fill is displayed
             if fill == 1 and len(displayed_zones) > 0:
                 # Add separator comment (using empty handle)
                 if len(handles) > 0:
-                    handles.append(plt.Line2D([0], [0], color='none'))
+                    handles.append(Line2D([0], [0], color='none'))
                     labels.append('─── Lithology ───')
                 
                 # Add each displayed zone with lithology type
@@ -3559,10 +3537,10 @@ class EFA_juxtaposition(tk.Tk):
             self.lithologyleg_handles = handles  # Store for legend plot
             self.lithologyleg_labels = labels    # Store for legend plot
             if len(handles) > 0:
-                plt.legend(handles=handles, labels=labels, loc='best', fontsize=8, framealpha=0.9)
+                ax.legend(handles=handles, labels=labels, loc='best', fontsize=8, framealpha=0.9)
         
         if gridlines == 1:
-            plt.grid(alpha=0.5)
+            ax.grid(alpha=0.5)
         return(fig)
 
     def zone_unit_plot_method(self, fv_df=None, hv_df=None, ld_dict=None, h_color=None, zone_unit_colors=None, title='', figsize=(6,12), fv=1, hv=1, fill=1, gridlines=1, linewidth=1, showlegend=1, invertx=1, z_select='Z', disp_orgpoints=1):
@@ -3604,7 +3582,8 @@ class EFA_juxtaposition(tk.Tk):
             z_select = self.z_select.get()
             
         title = 'Zone Juxtaposition - ' + title
-        fig = plt.figure(figsize = figsize)
+        fig = Figure(figsize=figsize)
+        ax = fig.add_subplot(111)
         
         # Track which zones are displayed for legend
         displayed_zones = set()
@@ -3626,14 +3605,11 @@ class EFA_juxtaposition(tk.Tk):
                         alpha = 0.0
 
                     if fv == 1:
-                        # Extract Length and depth values for horizon i-1 where values are not nan
                         fv_length = fv_df['length'][~np.isnan(fv_df.iloc[:,i-1])].values
                         fv_depth = fv_df.iloc[:,i-1][~np.isnan(fv_df.iloc[:,i-1])].values
-                        # extract Length and depth values for horizon i where values are not nan
                         fv_length2 = fv_df['length'][~np.isnan(fv_df.iloc[:,i])].values
                         fv_depth2 = fv_df.iloc[:,i][~np.isnan(fv_df.iloc[:,i])].values
-                        # Create polygon between fv_length and fv_length2 and use plt.fill to fill polygon
-                        plt.fill(np.concatenate([fv_length, fv_length2[::-1]]),
+                        ax.fill(np.concatenate([fv_length, fv_length2[::-1]]),
                                  np.concatenate([fv_depth, fv_depth2[::-1]]),
                                  color=zone_color, alpha=alpha)
                         displayed_zones.add(zone_idx)
@@ -3641,11 +3617,9 @@ class EFA_juxtaposition(tk.Tk):
                     if hv == 1:
                         hv_length = hv_df['length'][~np.isnan(hv_df.iloc[:,i-1])].values
                         hv_depth = hv_df.iloc[:,i-1][~np.isnan(hv_df.iloc[:,i-1])].values
-                        # extract Length and depth values for horizon i where values are not nan
                         hv_length2 = hv_df['length'][~np.isnan(hv_df.iloc[:,i])].values
                         hv_depth2 = hv_df.iloc[:,i][~np.isnan(hv_df.iloc[:,i])].values
-                        # Create polygon between hv_length and hv_length2 and use plt.fill to fill polygon
-                        plt.fill(np.concatenate([hv_length, hv_length2[::-1]]),
+                        ax.fill(np.concatenate([hv_length, hv_length2[::-1]]),
                                  np.concatenate([hv_depth, hv_depth2[::-1]]),
                                  color=zone_color, alpha=alpha)
                         displayed_zones.add(zone_idx)
@@ -3655,26 +3629,26 @@ class EFA_juxtaposition(tk.Tk):
         if fv == 1:
             for i in range(1, fv_df.shape[1]):
                 horizon_label = h_color.loc[i-1,'Alias'] if h_color.loc[i-1,'Alias'] else h_color.loc[i-1,'Horizon']
-                plt.plot(fv_df['length'], fv_df.iloc[:,i], color=h_color.loc[i-1,'Color'], linewidth=linewidth, label=f'{horizon_label} (FW)')
+                ax.plot(fv_df['length'], fv_df.iloc[:,i], color=h_color.loc[i-1,'Color'], linewidth=linewidth, label=f'{horizon_label} (FW)')
         
         if hv == 1:
             for i in range(1, fv_df.shape[1]):
                 horizon_label = h_color.loc[i-1,'Alias'] if h_color.loc[i-1,'Alias'] else h_color.loc[i-1,'Horizon']
-                plt.plot(hv_df['length'], hv_df.iloc[:,i], color=h_color.loc[i-1,'Color'], linestyle='--', linewidth=linewidth, label=f'{horizon_label} (HW)')
+                ax.plot(hv_df['length'], hv_df.iloc[:,i], color=h_color.loc[i-1,'Color'], linestyle='--', linewidth=linewidth, label=f'{horizon_label} (HW)')
 
         
         if fv == 0:
             for i in range(1, fv_df.shape[1]):
-                plt.plot(fv_df['length'], fv_df.iloc[:,i], color=h_color.loc[i-1,'Color'], alpha=0.1, linewidth=linewidth)
+                ax.plot(fv_df['length'], fv_df.iloc[:,i], color=h_color.loc[i-1,'Color'], alpha=0.1, linewidth=linewidth)
         
         if hv == 0:
             for i in range(1, fv_df.shape[1]):
-                plt.plot(hv_df['length'], hv_df.iloc[:,i], color=h_color.loc[i-1,'Color'], linestyle='--', alpha=0.1, linewidth=linewidth)
+                ax.plot(hv_df['length'], hv_df.iloc[:,i], color=h_color.loc[i-1,'Color'], linestyle='--', alpha=0.1, linewidth=linewidth)
 
         # Draw horizontal lines if enabled
         for hl in self.hlines:
             if hl['enabled'].get() and hl['color'].get().lower() != 'none':
-                plt.hlines(y=hl['elevation'].get(), xmin=hl['xmin'].get(), xmax=hl['xmax'].get(),
+                ax.hlines(y=hl['elevation'].get(), xmin=hl['xmin'].get(), xmax=hl['xmax'].get(),
                            colors=hl['color'].get(), linestyles=hl['style'].get(), linewidth=1.5,
                            label=hl['name'].get())
 
@@ -3692,32 +3666,32 @@ class EFA_juxtaposition(tk.Tk):
                 hv_length_list = ld_dict[list(ld_dict.keys())[i]]['hv']['l']
                 hv_depth_list = ld_dict[list(ld_dict.keys())[i]]['hv']['d']
 
-                plt.scatter(fv_length_list, fv_depth_list, marker='^', color=self.horizon_colors[list(ld_dict.keys())[i]])
-                plt.scatter(hv_length_list, hv_depth_list, marker='v', color=self.horizon_colors[list(ld_dict.keys())[i]])
+                ax.scatter(fv_length_list, fv_depth_list, marker='^', color=self.horizon_colors[list(ld_dict.keys())[i]])
+                ax.scatter(hv_length_list, hv_depth_list, marker='v', color=self.horizon_colors[list(ld_dict.keys())[i]])
 
-        plt.xlabel(f"Distance along mean strike ({self.unit_xy})")
-        plt.ylabel(f"Elevation ({self.z_select_to_unit()})")
-        plt.title(title)
+        ax.set_xlabel(f"Distance along mean strike ({self.unit_xy})")
+        ax.set_ylabel(f"Elevation ({self.z_select_to_unit()})")
+        ax.set_title(title)
         ur, ul = strike_to_compass(self.strike)
         # invert x axis if specified, invert compas directions
         if invertx:
-            plt.gca().invert_xaxis()
-            plt.title(ul, loc='right')
-            plt.title(ur, loc='left')
+            ax.invert_xaxis()
+            ax.set_title(ul, loc='right')
+            ax.set_title(ur, loc='left')
         else:
-            plt.title(ur, loc='right')
-            plt.title(ul, loc='left')
+            ax.set_title(ur, loc='right')
+            ax.set_title(ul, loc='left')
         
         # Add legend at best location if enabled
         if showlegend:
             # Get current legend handles and labels from the plot
-            handles, labels = plt.gca().get_legend_handles_labels()
+            handles, labels = ax.get_legend_handles_labels()
             
             # Add unit zone patches to legend if fill is displayed
             if fill == 1 and len(displayed_zones) > 0:
                 # Add separator comment (using empty handle)
                 if len(handles) > 0:
-                    handles.append(plt.Line2D([0], [0], color='none'))
+                    handles.append(Line2D([0], [0], color='none'))
                     labels.append('─── Zone Units ───')
                 
                 # Add each displayed zone with unit color
@@ -3736,10 +3710,10 @@ class EFA_juxtaposition(tk.Tk):
             self.unitlegend_handles = handles
             self.unitlegend_labels = labels
             if len(handles) > 0:
-                plt.legend(handles=handles, labels=labels, loc='best', fontsize=8, framealpha=0.9)
+                ax.legend(handles=handles, labels=labels, loc='best', fontsize=8, framealpha=0.9)
         
         if gridlines == 1:
-            plt.grid(alpha=0.5)
+            ax.grid(alpha=0.5)
         return(fig)
 
     def zone_juxtscenario_plot_method(self, fv_df=None, hv_df=None, ld_dict=None, h_color=None, z_color=None, title='', figsize=(6,12), gridlines=1, linewidth=1, fv=1, hv=1, apex=1, apexid=1, showlegend=1, invertx=1, z_select='Z', disp_orgpoints=1):
@@ -3784,7 +3758,8 @@ class EFA_juxtaposition(tk.Tk):
             
         title = 'Juxtaposition Scenario - ' + title
         warning = ''
-        fig = plt.figure(figsize=figsize)
+        fig = Figure(figsize=figsize)
+        ax = fig.add_subplot(111)
         fv_poly_x = np.append(fv_df['length'].to_numpy(),fv_df['length'].to_numpy()[::-1])
         hv_poly_x = np.append(hv_df['length'].to_numpy(),hv_df['length'].to_numpy()[::-1])
         
@@ -3856,14 +3831,14 @@ class EFA_juxtaposition(tk.Tk):
                         polylist = list(p_intersect.geoms)
                         for poly in polylist:
                             xp,yp = poly.exterior.xy
-                            plt.fill(xp,yp,color=new_color)
+                            ax.fill(xp,yp,color=new_color)
                             ym = max(yp)
                             xm = list(xp)[list(yp).index(max(yp))]
                             juxt_list.append([list(fv_df)[i-1]+'-'+list(fv_df)[i],list(hv_df)[j-1]+'-'+list(hv_df)[j],z_color.loc[i-2,'Alias'],z_color.loc[j-2,'Alias'],round(xm,0),round(ym,0),fv_type,hv_type])
                     else:
                         try:
                             xp,yp = p_intersect.exterior.xy
-                            plt.fill(xp,yp,color=new_color)
+                            ax.fill(xp,yp,color=new_color)
                             ym = max(yp)
                             xm = list(xp)[list(yp).index(max(yp))]
                             juxt_list.append([list(fv_df)[i-1]+'-'+list(fv_df)[i],list(hv_df)[j-1]+'-'+list(hv_df)[j],z_color.loc[i-2,'Alias'],z_color.loc[j-2,'Alias'],round(xm,2),round(ym,2),fv_type,hv_type])
@@ -3872,7 +3847,7 @@ class EFA_juxtaposition(tk.Tk):
                                 for geom in p_intersect.geoms:
                                     if geom.geom_type == 'Polygon':
                                         xp,yp = geom.exterior.xy
-                                        plt.fill(xp,yp,color=new_color)
+                                        ax.fill(xp,yp,color=new_color)
                                         ym = max(yp)
                                         xm = list(xp)[list(yp).index(max(yp))]
                                         juxt_list.append([list(fv_df)[i-1]+'-'+list(fv_df)[i],list(hv_df)[j-1]+'-'+list(hv_df)[j],z_color.loc[i-2,'Alias'],z_color.loc[j-2,'Alias'],round(xm,0),round(ym,0),fv_type,hv_type])
@@ -3881,37 +3856,34 @@ class EFA_juxtaposition(tk.Tk):
                     #print(warning)
         
         for i in range(1,fv_df.shape[1]):
-            plt.plot(fv_df['length'],fv_df.iloc[:,i],color=h_color.loc[i-1,'Color'], linewidth = linewidth, alpha = 0.1)
+            ax.plot(fv_df['length'],fv_df.iloc[:,i],color=h_color.loc[i-1,'Color'], linewidth = linewidth, alpha = 0.1)
         for i in range(1,fv_df.shape[1]):
-            plt.plot(hv_df['length'],hv_df.iloc[:,i],color=h_color.loc[i-1,'Color'] ,linestyle='--', linewidth = linewidth, alpha = 0.1)
+            ax.plot(hv_df['length'],hv_df.iloc[:,i],color=h_color.loc[i-1,'Color'] ,linestyle='--', linewidth = linewidth, alpha = 0.1)
             
         if fv == 1:
             for i in range(1,fv_df.shape[1]):
                 horizon_label = h_color.loc[i-1,'Alias'] if h_color.loc[i-1,'Alias'] else h_color.loc[i-1,'Horizon']
-                plt.plot(fv_df['length'],fv_df.iloc[:,i],color=h_color.loc[i-1,'Color'], linewidth = linewidth, label=f'{horizon_label} (FW)')
+                ax.plot(fv_df['length'],fv_df.iloc[:,i],color=h_color.loc[i-1,'Color'], linewidth = linewidth, label=f'{horizon_label} (FW)')
         if hv == 1:
             for i in range(1,fv_df.shape[1]):
                 horizon_label = h_color.loc[i-1,'Alias'] if h_color.loc[i-1,'Alias'] else h_color.loc[i-1,'Horizon']
-                plt.plot(hv_df['length'],hv_df.iloc[:,i],color=h_color.loc[i-1,'Color'] ,linestyle='--', linewidth = linewidth, label=f'{horizon_label} (HW)')
+                ax.plot(hv_df['length'],hv_df.iloc[:,i],color=h_color.loc[i-1,'Color'] ,linestyle='--', linewidth = linewidth, label=f'{horizon_label} (HW)')
         juxt_df = pd.DataFrame(juxt_list,columns=['FV_Zone','HV_Zone','FV_Alias','HV_Alias','Length','Elevation','FV_Lith','HV_Lith'])
         if apex == 1:
-            plt.scatter(juxt_df['Length'], juxt_df['Elevation'], marker = 'x', color = 'red')
+            ax.scatter(juxt_df['Length'], juxt_df['Elevation'], marker = 'x', color = 'red')
         if apexid == 1:
             for jindex, jrow in juxt_df.iterrows():
-                plt.text(jrow['Length'], jrow['Elevation'],jindex, color = 'darkred')
+                ax.text(jrow['Length'], jrow['Elevation'],jindex, color = 'darkred')
 
         # Draw horizontal lines if enabled
         for hl in self.hlines:
             if hl['enabled'].get() and hl['color'].get().lower() != 'none':
-                plt.hlines(y=hl['elevation'].get(), xmin=hl['xmin'].get(), xmax=hl['xmax'].get(),
+                ax.hlines(y=hl['elevation'].get(), xmin=hl['xmin'].get(), xmax=hl['xmax'].get(),
                            colors=hl['color'].get(), linestyles=hl['style'].get(), linewidth=1.5,
                            label=hl['name'].get())
 
         if disp_orgpoints == 1:
             for i in range(len(list(ld_dict.keys()))):
-                #print(list(ld_dict.keys())[i])
-                #print(h_color)
-                #print(self.horizon_colors[list(ld_dict.keys())[i]])
                 zfv = []
                 for zfvi in range(0,len(ld_dict[list(ld_dict.keys())[i]]['fv']['l'])):
                     zfv.append(zfvi)
@@ -3921,34 +3893,32 @@ class EFA_juxtaposition(tk.Tk):
             
                 z2 = len(ld_dict[list(ld_dict.keys())[i]]['hv']['l'])
 
-                plt.scatter(ld_dict[list(ld_dict.keys())[i]]['fv']['l'],ld_dict[list(ld_dict.keys())[i]]['fv']['d'], marker = '^', color = self.horizon_colors[list(ld_dict.keys())[i]])
-                plt.scatter(ld_dict[list(ld_dict.keys())[i]]['hv']['l'],ld_dict[list(ld_dict.keys())[i]]['hv']['d'], marker = 'v', color = self.horizon_colors[list(ld_dict.keys())[i]])
+                ax.scatter(ld_dict[list(ld_dict.keys())[i]]['fv']['l'],ld_dict[list(ld_dict.keys())[i]]['fv']['d'], marker = '^', color = self.horizon_colors[list(ld_dict.keys())[i]])
+                ax.scatter(ld_dict[list(ld_dict.keys())[i]]['hv']['l'],ld_dict[list(ld_dict.keys())[i]]['hv']['d'], marker = 'v', color = self.horizon_colors[list(ld_dict.keys())[i]])
         
-        plt.title(title)
+        ax.set_title(title)
         ur, ul = strike_to_compass(self.strike)
         # invert x axis if specified, invert compas directions
         if invertx:
-            plt.gca().invert_xaxis()
-            plt.title(ul, loc='right')
-            plt.title(ur, loc='left')
+            ax.invert_xaxis()
+            ax.set_title(ul, loc='right')
+            ax.set_title(ur, loc='left')
         else:
-            plt.title(ur, loc='right')
-            plt.title(ul, loc='left')
-        #plt.title(ul, loc='left')
-        #plt.title(ur, loc='right')
-        plt.xlabel(f"Distance along mean strike ({self.unit_xy})")
-        plt.ylabel(f"Elevation  ({self.z_select_to_unit()})")
+            ax.set_title(ur, loc='right')
+            ax.set_title(ul, loc='left')
+        ax.set_xlabel(f"Distance along mean strike ({self.unit_xy})")
+        ax.set_ylabel(f"Elevation  ({self.z_select_to_unit()})")
         
         # Add legend at best location if enabled
         if showlegend:
             # Get current legend handles and labels from the plot
-            handles, labels = plt.gca().get_legend_handles_labels()
+            handles, labels = ax.get_legend_handles_labels()
             
             # Add juxtaposition type patches to legend if any exist
             if len(juxt_types_displayed) > 0:
                 # Add separator
                 if len(handles) > 0:
-                    handles.append(plt.Line2D([0], [0], color='none'))
+                    handles.append(Line2D([0], [0], color='none'))
                     labels.append('─── Juxtaposition ───')
                 
                 # Define the desired order of juxtaposition types
@@ -3975,10 +3945,10 @@ class EFA_juxtaposition(tk.Tk):
             self.scenariolegend_handles = handles
             self.scenariolegend_labels = labels
             if len(handles) > 0:
-                plt.legend(handles=handles, labels=labels, loc='best', fontsize=8, framealpha=0.9)
+                ax.legend(handles=handles, labels=labels, loc='best', fontsize=8, framealpha=0.9)
         
         if gridlines == 1:
-            plt.grid(alpha=0.5)
+            ax.grid(alpha=0.5)
         return(fig,juxt_df,warning)
 
 
@@ -4561,7 +4531,8 @@ Alt+4           QC Plot Tab
         # Add mean throw if it's typically shown
         legend_items.append(Line2D([0], [0], color='black', linestyle='dotted', lw=1, label='Mean Throw'))
         
-        fig, ax = plt.subplots(figsize=(6, 8))
+        fig = Figure(figsize=(6, 8))
+        ax = fig.add_subplot(111)
         ax.legend(handles=legend_items, loc='upper left')
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
@@ -4593,7 +4564,8 @@ Alt+4           QC Plot Tab
                     legend_items.append(Patch(facecolor=color, edgecolor=color, label=unit))
             labels = [item.get_label() for item in legend_items]
         
-        fig, ax = plt.subplots(figsize=(6, 8))
+        fig = Figure(figsize=(6, 8))
+        ax = fig.add_subplot(111)
         ax.legend(handles=legend_items, labels=labels, loc='upper left')
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
@@ -4625,7 +4597,8 @@ Alt+4           QC Plot Tab
             legend_items.append(Patch(facecolor=row['Color'], alpha=0.5, edgecolor=row['Color'], 
                                      label=row['Alias'] + ztype))
         
-        fig, ax = plt.subplots(figsize=(6, 8))
+        fig = Figure(figsize=(6, 8))
+        ax = fig.add_subplot(111)
         ax.legend(handles=legend_items, loc='upper left')
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
@@ -4652,7 +4625,8 @@ Alt+4           QC Plot Tab
         legend_items.append(Patch(facecolor='DarkGray', edgecolor='DarkGray', label='noRes-noRes'))
         legend_items.append(Patch(facecolor='azure', edgecolor='azure', label='Undefined-Any'))
         
-        fig, ax = plt.subplots(figsize=(6, 8))
+        fig = Figure(figsize=(6, 8))
+        ax = fig.add_subplot(111)
         ax.legend(handles=legend_items, loc='upper left')
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
